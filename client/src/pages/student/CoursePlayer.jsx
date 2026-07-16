@@ -760,7 +760,6 @@ export default function CoursePlayer() {
             </div>
           </div>
         </div>
-        </div>
 
         {/* Right Column: Course Player Curriculum Sidebar (order-2 on mobile, order-3 on desktop) */}
         <div className="lg:col-span-1 space-y-6 order-2 lg:order-3 lg:row-span-2">

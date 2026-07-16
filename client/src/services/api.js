@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { setCredentials, logout } from '../store/authSlice';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1';
+
 export const API = axios.create({
-  baseURL: 'http://localhost:5001/api/v1',
+  baseURL: API_BASE_URL,
   withCredentials: true, // Send httpOnly cookies
   headers: {
     'Content-Type': 'application/json',
@@ -52,7 +54,7 @@ API.interceptors.response.use(
         
         // Call refresh endpoint to get new access token
         const refreshResponse = await axios.post(
-          'http://localhost:5001/api/v1/auth/refresh',
+          `${API_BASE_URL}/auth/refresh`,
           {},
           { withCredentials: true }
         );
