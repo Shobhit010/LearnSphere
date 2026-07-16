@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { setCredentials, logout } from '../store/authSlice';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1';
+let apiVal = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1';
+if (apiVal && !apiVal.endsWith('/api/v1') && !apiVal.endsWith('/api/v1/')) {
+  apiVal = apiVal.endsWith('/') ? `${apiVal}api/v1` : `${apiVal}/api/v1`;
+}
+const API_BASE_URL = apiVal;
 
 export const API = axios.create({
   baseURL: API_BASE_URL,
