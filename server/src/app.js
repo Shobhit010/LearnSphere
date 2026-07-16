@@ -78,6 +78,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Welcome to the LearnSphere API Server!',
+    healthCheck: '/api/health',
+  });
+});
+
 // 9. API ROUTES
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
