@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { BookOpen, Star, ShieldCheck, Play, Award, Clock, FileText, CheckCircle, Tag, Loader2 } from 'lucide-react';
+import { BookOpen, Star, ShieldCheck, Play, Award, Clock, FileText, CheckCircle, Tag, Loader2, X, CreditCard } from 'lucide-react';
 import { API } from '../services/api';
+import YouTube from 'react-youtube';
 
 export default function CourseDetail() {
   const { id } = useParams();
@@ -22,6 +23,22 @@ export default function CourseDetail() {
   const [couponError, setCouponError] = useState(null);
   const [couponApplied, setCouponApplied] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+  const [paymentStep, setPaymentStep] = useState('form');
+  const [activePreviewLecture, setActivePreviewLecture] = useState(null);
+  const [receipt, setReceipt] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('upi');
+  const [paymentForm, setPaymentForm] = useState({
+    cardNumber: '',
+    cardName: '',
+    expiry: '',
+    cvv: '',
+    upiId: '',
+    bankName: '',
+    wallet: 'Paytm',
+    walletMobile: '',
+  });
 
   useEffect(() => {
     fetchCourseDetails();
@@ -82,28 +99,116 @@ export default function CourseDetail() {
     }
   };
 
-  const handleEnroll = async () => {
+  const handleEnroll = () => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
 
+    setPaymentError('');
+    setPaymentStep('form');
+    setPaymentMethod('upi');
+    setShowPaymentModal(true);
+  };
+
+  const getPayableAmount = () => {
+    if (discountInfo?.newPrice !== undefined) {
+      return discountInfo.newPrice;
+    }
+
+    if (course.discountedPrice && course.discountValidTill && new Date() < new Date(course.discountValidTill)) {
+      return course.discountedPrice;
+    }
+
+    return course.price;
+  };
+
+  const handleProcessDummyPayment = async () => {
+    const cardValid =
+      paymentForm.cardNumber.replace(/\s/g, '').length >= 12 &&
+      paymentForm.cardName.trim() &&
+      paymentForm.expiry.length >= 4 &&
+      paymentForm.cvv.length >= 3;
+    const upiValid = /.+@.+/.test(paymentForm.upiId.trim());
+    const netBankingValid = paymentForm.bankName.trim().length >= 2;
+    const walletValid = /^\d{10}$/.test(paymentForm.walletMobile.trim());
+
+    const methodValidationMap = {
+      card: cardValid,
+      upi: upiValid,
+      netbanking: netBankingValid,
+      wallet: walletValid,
+    };
+
+    if (!methodValidationMap[paymentMethod]) {
+      setPaymentError('Please fill valid payment details to continue.');
+      return;
+    }
+
     setCheckoutLoading(true);
+    setPaymentError('');
     try {
-      // Use mock checkout pathway for quick local testing and evaluation
-      await API.post('/payments/mock-checkout', {
+      const paymentRes = await API.post('/payments/mock-checkout', {
         courseId: id,
         couponCode: couponApplied ? couponCode : undefined,
       });
 
-      // Enrollment successful, send to player watch page
-      navigate(`/learn/${id}`);
+      const paymentData = paymentRes.data?.data || {};
+      setReceipt({
+        transactionId: paymentData.transactionId || `mock_tx_${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        amountPaid: paymentData.amountPaid ?? getPayableAmount(),
+        paidAt: new Date().toISOString(),
+        paymentMethod,
+        methodLabel:
+          paymentMethod === 'upi'
+            ? `UPI (${paymentForm.upiId || 'upi'})`
+            : paymentMethod === 'card'
+            ? 'Credit/Debit Card'
+            : paymentMethod === 'netbanking'
+            ? `Net Banking (${paymentForm.bankName || 'bank'})`
+            : `Wallet (${paymentForm.wallet || 'wallet'})`,
+      });
+      setPaymentStep('success');
+
+      setTimeout(() => {
+        setShowPaymentModal(false);
+        navigate(`/learn/${id}`);
+      }, 4500);
     } catch (err) {
       console.error('Enrollment failed', err.message);
-      alert(err.response?.data?.error?.message || 'Checkout failed. Please try again.');
+      setPaymentError(err.response?.data?.error?.message || 'Payment processing failed. Please try again.');
     } finally {
       setCheckoutLoading(false);
     }
+  };
+
+  const handleDownloadReceipt = () => {
+    if (!receipt || !course) {
+      return;
+    }
+
+    const receiptText = [
+      'LearnSphere Dummy Payment Receipt',
+      '--------------------------------',
+      `Course: ${course.title}`,
+      `Student: ${user?.name || 'Learner'}`,
+      `Transaction ID: ${receipt.transactionId}`,
+      `Payment Method: ${receipt.methodLabel || receipt.paymentMethod || 'Dummy'}`,
+      `Amount Paid: $${Number(receipt.amountPaid || 0).toFixed(2)}`,
+      `Paid At: ${new Date(receipt.paidAt).toLocaleString()}`,
+      'Status: Paid (Dummy Gateway)',
+    ].join('\n');
+
+    const blob = new Blob([receiptText], { type: 'text/plain;charset=utf-8' });
+    const objectUrl = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = `learnsphere-receipt-${receipt.transactionId}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(objectUrl);
   };
 
   if (loading) {
@@ -188,24 +293,41 @@ export default function CourseDetail() {
                     {chapter.lectures?.length === 0 ? (
                       <div className="p-4 text-xs text-slate-500 italic">No lectures in this chapter.</div>
                     ) : (
-                      chapter.lectures.map((lecture) => (
-                        <div key={lecture._id} className="px-5 py-3.5 flex justify-between items-center text-xs">
-                          <div className="flex items-center space-x-3 text-slate-350">
-                            <Play className="h-3.5 w-3.5 text-brand-400 shrink-0" />
-                            <span className="line-clamp-1">{lecture.title}</span>
-                          </div>
-                          <div className="flex items-center space-x-3 shrink-0">
-                            {lecture.isPreviewFree && (
-                              <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded text-xxs font-bold">
-                                Free Preview
+                      chapter.lectures.map((lecture) => {
+                        const canPreview = lecture.isPreviewFree;
+                        return (
+                          <div
+                            key={lecture._id}
+                            onClick={() => canPreview && setActivePreviewLecture(lecture)}
+                            className={`px-5 py-3.5 flex justify-between items-center text-xs transition-all ${
+                              canPreview
+                                ? 'cursor-pointer hover:bg-slate-800/40 text-slate-200'
+                                : 'text-slate-500'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-3">
+                              {canPreview ? (
+                                <Play className="h-3.5 w-3.5 text-emerald-400 shrink-0 fill-emerald-500/15" />
+                              ) : (
+                                <Play className="h-3.5 w-3.5 text-slate-650 shrink-0 opacity-40" />
+                              )}
+                              <span className={`line-clamp-1 ${canPreview ? 'font-semibold text-slate-100' : 'text-slate-400'}`}>
+                                {lecture.title}
                               </span>
-                            )}
-                            <span className="text-slate-550 font-medium">
-                              {Math.round((lecture.duration || 0) / 60)} mins
-                            </span>
+                            </div>
+                            <div className="flex items-center space-x-3 shrink-0">
+                              {canPreview && (
+                                <span className="bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider">
+                                  Free Preview
+                                </span>
+                              )}
+                              <span className="text-slate-550 font-medium">
+                                {Math.round((lecture.duration || 0) / 60)} mins
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -366,7 +488,7 @@ export default function CourseDetail() {
                       <span>Processing...</span>
                     </>
                   ) : (
-                    <span>Enroll Now</span>
+                    <span>Proceed to Payment</span>
                   )}
                 </button>
               </div>
@@ -391,6 +513,333 @@ export default function CourseDetail() {
         </div>
 
       </div>
+
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            {paymentStep === 'form' ? (
+              <>
+                <div className="mb-5 flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Dummy Payment Gateway</h3>
+                    <p className="mt-1 text-xs text-slate-400">Complete payment to confirm enrollment</p>
+                  </div>
+                  <button
+                    onClick={() => setShowPaymentModal(false)}
+                    className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-3 text-xs text-emerald-300">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>Test Mode: no real money is charged</span>
+                  </div>
+                </div>
+
+                <div className="mb-4 rounded-lg border border-slate-800 bg-slate-950/70 p-3 text-sm">
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span>Total Payable</span>
+                    <span className="font-bold text-white">${getPayableAmount().toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="mb-4 grid grid-cols-2 gap-2 text-xs">
+                  <button
+                    onClick={() => setPaymentMethod('upi')}
+                    className={`rounded-lg border px-3 py-2 font-semibold transition-colors ${
+                      paymentMethod === 'upi'
+                        ? 'border-brand-500 bg-brand-500/15 text-brand-300'
+                        : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    UPI
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('card')}
+                    className={`rounded-lg border px-3 py-2 font-semibold transition-colors ${
+                      paymentMethod === 'card'
+                        ? 'border-brand-500 bg-brand-500/15 text-brand-300'
+                        : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    Card
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('netbanking')}
+                    className={`rounded-lg border px-3 py-2 font-semibold transition-colors ${
+                      paymentMethod === 'netbanking'
+                        ? 'border-brand-500 bg-brand-500/15 text-brand-300'
+                        : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    Net Banking
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('wallet')}
+                    className={`rounded-lg border px-3 py-2 font-semibold transition-colors ${
+                      paymentMethod === 'wallet'
+                        ? 'border-brand-500 bg-brand-500/15 text-brand-300'
+                        : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    Wallet
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {paymentMethod === 'upi' && (
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">UPI ID</label>
+                      <input
+                        type="text"
+                        value={paymentForm.upiId}
+                        onChange={(e) =>
+                          setPaymentForm((prev) => ({ ...prev, upiId: e.target.value }))
+                        }
+                        placeholder="name@upi"
+                        className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:border-brand-500 focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {paymentMethod === 'card' && (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-400">Card Number</label>
+                        <div className="relative">
+                          <CreditCard className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                          <input
+                            type="text"
+                            maxLength={19}
+                            value={paymentForm.cardNumber}
+                            onChange={(e) =>
+                              setPaymentForm((prev) => ({ ...prev, cardNumber: e.target.value }))
+                            }
+                            placeholder="4242 4242 4242 4242"
+                            className="w-full rounded-lg border border-slate-800 bg-slate-950 py-2.5 pl-10 pr-3 text-sm text-white placeholder-slate-600 focus:border-brand-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-400">Card Holder Name</label>
+                        <input
+                          type="text"
+                          value={paymentForm.cardName}
+                          onChange={(e) =>
+                            setPaymentForm((prev) => ({ ...prev, cardName: e.target.value }))
+                          }
+                          placeholder="John Doe"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:border-brand-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-slate-400">Expiry</label>
+                          <input
+                            type="text"
+                            maxLength={5}
+                            value={paymentForm.expiry}
+                            onChange={(e) =>
+                              setPaymentForm((prev) => ({ ...prev, expiry: e.target.value }))
+                            }
+                            placeholder="MM/YY"
+                            className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:border-brand-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-slate-400">CVV</label>
+                          <input
+                            type="password"
+                            maxLength={4}
+                            value={paymentForm.cvv}
+                            onChange={(e) =>
+                              setPaymentForm((prev) => ({ ...prev, cvv: e.target.value }))
+                            }
+                            placeholder="123"
+                            className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:border-brand-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {paymentMethod === 'netbanking' && (
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-400">Bank Name</label>
+                      <input
+                        type="text"
+                        value={paymentForm.bankName}
+                        onChange={(e) =>
+                          setPaymentForm((prev) => ({ ...prev, bankName: e.target.value }))
+                        }
+                        placeholder="e.g. HDFC, SBI, ICICI"
+                        className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:border-brand-500 focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {paymentMethod === 'wallet' && (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-400">Wallet Provider</label>
+                        <select
+                          value={paymentForm.wallet}
+                          onChange={(e) =>
+                            setPaymentForm((prev) => ({ ...prev, wallet: e.target.value }))
+                          }
+                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                        >
+                          <option value="Paytm">Paytm</option>
+                          <option value="PhonePe">PhonePe</option>
+                          <option value="Amazon Pay">Amazon Pay</option>
+                          <option value="Mobikwik">Mobikwik</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-400">Mobile Number</label>
+                        <input
+                          type="text"
+                          maxLength={10}
+                          value={paymentForm.walletMobile}
+                          onChange={(e) =>
+                            setPaymentForm((prev) => ({ ...prev, walletMobile: e.target.value.replace(/\D/g, '') }))
+                          }
+                          placeholder="10-digit mobile"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:border-brand-500 focus:outline-none"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {paymentError && <p className="text-xs font-medium text-red-400">{paymentError}</p>}
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => setShowPaymentModal(false)}
+                      className="flex-1 rounded-lg border border-slate-700 bg-slate-900 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleProcessDummyPayment}
+                      disabled={checkoutLoading}
+                      className="flex-1 rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                    >
+                      {checkoutLoading ? 'Processing...' : 'Process Payment'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="py-2">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
+                  <CheckCircle className="h-10 w-10 animate-pulse" />
+                </div>
+                <h3 className="text-center text-lg font-bold text-white">Payment Successful</h3>
+                <p className="mt-1 text-center text-xs text-slate-400">Enrollment confirmed. Redirecting to course player in a moment...</p>
+
+                <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-xs">
+                  <div className="mb-2 flex items-center justify-between text-slate-400">
+                    <span>Status</span>
+                    <span className="font-semibold text-emerald-400">Paid</span>
+                  </div>
+                  <div className="mb-2 flex items-center justify-between text-slate-400">
+                    <span>Amount</span>
+                    <span className="font-semibold text-white">${Number(receipt?.amountPaid || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="mb-2 flex items-center justify-between text-slate-400">
+                    <span>Transaction</span>
+                    <span className="font-semibold text-slate-300">{receipt?.transactionId}</span>
+                  </div>
+                  <div className="mb-2 flex items-center justify-between text-slate-400">
+                    <span>Method</span>
+                    <span className="font-semibold text-slate-300">{receipt?.methodLabel || '-'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span>Time</span>
+                    <span className="font-semibold text-slate-300">
+                      {receipt?.paidAt ? new Date(receipt.paidAt).toLocaleTimeString() : '-'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleDownloadReceipt}
+                  className="mt-4 w-full rounded-lg border border-brand-500/40 bg-brand-500/10 py-2.5 text-xs font-semibold text-brand-300 hover:bg-brand-500/20"
+                >
+                  Download Receipt
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Free Preview Video Modal */}
+      {activePreviewLecture && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/80 bg-slate-900/50">
+              <div>
+                <span className="bg-emerald-500/15 text-emerald-450 px-2.5 py-0.5 rounded text-xxs font-extrabold uppercase tracking-wider border border-emerald-500/20">
+                  Free Preview
+                </span>
+                <h3 className="text-base font-bold text-white mt-2.5 line-clamp-1">{activePreviewLecture.title}</h3>
+              </div>
+              <button
+                onClick={() => setActivePreviewLecture(null)}
+                className="rounded-full p-2 text-slate-450 hover:bg-slate-800 hover:text-white transition-all focus:outline-none"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Video Player */}
+            <div className="aspect-video w-full bg-black relative">
+              <YouTube
+                videoId={activePreviewLecture.youtubeVideoId}
+                opts={{
+                  width: '100%',
+                  height: '100%',
+                  playerVars: {
+                    autoplay: 1,
+                    modestbranding: 1,
+                    rel: 0,
+                  },
+                }}
+                className="w-full h-full"
+              />
+            </div>
+
+            {/* Footer with a purchase CTA */}
+            {!isEnrolled && (
+              <div className="px-6 py-4 bg-slate-950/70 border-t border-slate-850/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-left">
+                  <p className="text-xs text-slate-450">Enjoying this preview? Get lifetime access to the full course.</p>
+                  <p className="text-sm font-bold text-white mt-1">
+                    Price: {course.price === 0 ? 'Free' : `$${getPayableAmount().toFixed(2)}`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setActivePreviewLecture(null);
+                    handleEnroll();
+                  }}
+                  className="bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs rounded-xl px-5 py-2.5 transition-all shadow-md active:scale-97"
+                >
+                  Enroll Now
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

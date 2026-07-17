@@ -89,10 +89,10 @@ export default function TeacherDashboard() {
   const handleSubmitForReview = async (courseId) => {
     try {
       await API.patch(`/courses/${courseId}/submit`);
-      alert('Course submitted successfully for admin review!');
+      alert('Course published successfully!');
       fetchDashboardData();
     } catch (err) {
-      alert(err.response?.data?.error?.message || 'Failed to submit course. Ensure you have added chapters.');
+      alert(err.response?.data?.error?.message || 'Failed to publish course. Ensure you have added chapters.');
     }
   };
 
@@ -186,7 +186,7 @@ export default function TeacherDashboard() {
 
           {/* Stat 5 */}
           <div className="glass-panel rounded-2xl p-5 space-y-3 border border-slate-800">
-            <span className="text-xxs font-semibold uppercase tracking-widest text-slate-500">Syllabus Completion</span>
+                <span className="text-xxs font-semibold uppercase tracking-widest text-slate-500">Syllabus Completion</span>
             <div className="flex items-center space-x-2">
               <CheckCircle className="h-5 w-5 text-emerald-450" />
               <span className="text-2xl font-black text-white">{analytics.completionRate}%</span>
@@ -252,7 +252,7 @@ export default function TeacherDashboard() {
                         onClick={() => handleSubmitForReview(course.courseId)}
                         className="bg-slate-950 border border-slate-900 hover:border-slate-800 text-slate-350 text-xxs font-semibold py-2 px-3 rounded-lg transition-colors"
                       >
-                        Submit Review
+                        Publish
                       </button>
                     )}
                     

@@ -213,7 +213,12 @@ const simulateMockCheckout = expressAsyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     success: true,
-    data: enrollment,
+    data: {
+      enrollment,
+      transactionId: paymentIntentId,
+      amountPaid: finalPrice,
+      courseId,
+    },
     message: 'Mock Checkout simulated successfully. Course access granted!',
   });
 });

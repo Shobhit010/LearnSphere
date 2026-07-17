@@ -44,7 +44,7 @@ const userSchema = new mongoose.Schema(
     },
     isApprovedTeacher: {
       type: Boolean,
-      default: false, // Teachers need admin approval
+      default: true,
     },
     refreshToken: {
       type: String,

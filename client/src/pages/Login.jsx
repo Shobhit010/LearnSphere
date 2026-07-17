@@ -26,9 +26,7 @@ export default function Login() {
       dispatch(setCredentials({ user, accessToken }));
 
       // Redirect depending on user role
-      if (user.role === 'admin') {
-        navigate('/admin/dashboard');
-      } else if (user.role === 'teacher') {
+      if (user.role === 'teacher') {
         navigate('/teacher/dashboard');
       } else {
         navigate('/dashboard');

@@ -17,16 +17,13 @@ const register = expressAsyncHandler(async (req, res, next) => {
     return next(new AppError('Email is already registered', 400));
   }
 
-  // Determine teacher approval state
-  const isApprovedTeacher = role === 'teacher' ? (process.env.NODE_ENV === 'development') : false; // teachers require admin approval (auto-approved in dev)
-
   // Create user
   const user = await User.create({
     name,
     email,
     password,
     role: role || 'student',
-    isApprovedTeacher,
+    isApprovedTeacher: true,
   });
 
   await sendTokenResponse(user, 201, res);
@@ -114,6 +111,8 @@ const logout = expressAsyncHandler(async (req, res, next) => {
   res.cookie('refreshToken', 'none', {
     expires: new Date(Date.now() + 500),
     httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   });
 
   res.status(200).json({

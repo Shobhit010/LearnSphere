@@ -135,7 +135,7 @@ export default function Register() {
             <div className="bg-brand-950/20 border border-brand-550/30 rounded-xl p-4 flex items-start space-x-3 text-brand-300 text-xs">
               <Info className="h-5 w-5 text-brand-400 shrink-0 mt-0.5" />
               <span>
-                Note: Teacher registration requires admin approval. Once registered, you will log in to your dashboard pending verification before publishing.
+                Note: Teacher accounts can create and publish courses immediately after registration.
               </span>
             </div>
           )}
