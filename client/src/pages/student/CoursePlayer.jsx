@@ -310,7 +310,7 @@ export default function CoursePlayer() {
                 <YouTube
                   videoId={activeLecture.youtubeVideoId}
                   opts={{
-                    width: '105%',
+                    width: '100%',
                     height: '100%',
                     playerVars: {
                       autoplay: 0,
@@ -318,7 +318,7 @@ export default function CoursePlayer() {
                       rel: 0,
                     },
                   }}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full"
                 />
               </div>
 
