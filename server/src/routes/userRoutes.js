@@ -13,7 +13,7 @@ const router = express.Router();
 // Profile updates for logged in users
 router.patch('/profile', protect, updateProfile);
 
-// Admin-only user management routes
+// Admin-only user management routes retained for legacy support
 router.use(protect, restrictTo('admin'));
 
 router.route('/')

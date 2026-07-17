@@ -14,10 +14,33 @@ import CoursePlayer from './pages/student/CoursePlayer';
 import CertificateVerify from './pages/CertificateVerify';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import CourseBuilder from './pages/teacher/CourseBuilder';
-import AdminDashboard from './pages/admin/AdminDashboard';
 
-import { setCredentials, setLoading } from './store/authSlice';
+import { logout, setCredentials, setLoading } from './store/authSlice';
 import { API } from './services/api';
+
+const isJwtExpired = (token) => {
+  if (!token) {
+    return true;
+  }
+
+  try {
+    const payload = token.split('.')[1];
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const paddedPayload = normalizedPayload.padEnd(
+      normalizedPayload.length + ((4 - (normalizedPayload.length % 4)) % 4),
+      '='
+    );
+    const decodedPayload = JSON.parse(atob(paddedPayload));
+
+    if (!decodedPayload.exp) {
+      return true;
+    }
+
+    return Date.now() >= decodedPayload.exp * 1000;
+  } catch (error) {
+    return true;
+  }
+};
 
 // Route Guard: Authentication
 function ProtectedRoute({ children }) {
@@ -40,23 +63,32 @@ function RoleRoute({ children, allowedRoles }) {
 
 export default function App() {
   const dispatch = useDispatch();
-  const { loading } = useSelector((state) => state.auth);
+  const { accessToken, loading } = useSelector((state) => state.auth);
 
   // Check user session on app boot
   useEffect(() => {
     const initAuth = async () => {
+      if (accessToken && !isJwtExpired(accessToken)) {
+        dispatch(setLoading(false));
+        return;
+      }
+
       try {
-        console.log('App initialization: Checking session cookies...');
         const res = await API.post('/auth/refresh');
         const { user, accessToken } = res.data.data;
         dispatch(setCredentials({ user, accessToken }));
       } catch (err) {
-        console.log('No active refresh token session detected.');
-        dispatch(setLoading(false));
+        if (accessToken && !isJwtExpired(accessToken)) {
+          dispatch(setLoading(false));
+          return;
+        }
+
+        dispatch(logout());
       }
     };
+
     initAuth();
-  }, [dispatch]);
+  }, [accessToken, dispatch]);
 
   if (loading) {
     return (
@@ -103,7 +135,7 @@ export default function App() {
             <Route
               path="/teacher/dashboard"
               element={
-                <RoleRoute allowedRoles={['teacher', 'admin']}>
+                <RoleRoute allowedRoles={['teacher']}>
                   <TeacherDashboard />
                 </RoleRoute>
               }
@@ -111,18 +143,8 @@ export default function App() {
             <Route
               path="/teacher/courses/:id/edit"
               element={
-                <RoleRoute allowedRoles={['teacher', 'admin']}>
+                <RoleRoute allowedRoles={['teacher']}>
                   <CourseBuilder />
-                </RoleRoute>
-              }
-            />
-
-            {/* Admin Protected Routes */}
-            <Route
-              path="/admin/dashboard"
-              element={
-                <RoleRoute allowedRoles={['admin']}>
-                  <AdminDashboard />
                 </RoleRoute>
               }
             />

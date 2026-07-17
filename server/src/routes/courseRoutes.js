@@ -27,10 +27,10 @@ router.route('/:id')
 // Thumbnail upload
 router.patch('/:id/thumbnail', protect, restrictTo('teacher', 'admin'), upload.single('thumbnail'), uploadCourseThumbnail);
 
-// Teacher workflow: submit course for admin review
+// Teacher workflow: publish course directly
 router.patch('/:id/submit', protect, restrictTo('teacher', 'admin'), submitCourseForReview);
 
-// Admin workflow: approve or reject course
-router.patch('/:id/review', protect, restrictTo('admin'), approveOrRejectCourse);
+// Legacy review endpoint kept for compatibility
+router.patch('/:id/review', protect, restrictTo('teacher', 'admin'), approveOrRejectCourse);
 
 module.exports = router;

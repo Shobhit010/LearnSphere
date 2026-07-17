@@ -18,6 +18,8 @@ import {
   Send,
   Loader2,
   Award,
+  Trophy,
+  XCircle,
 } from 'lucide-react';
 import { API } from '../../services/api';
 
@@ -487,52 +489,109 @@ export default function CoursePlayer() {
                   ) : quizResult ? (
                     /* Quiz Results Panel */
                     <div className="space-y-6 animate-fade-in text-xs">
-                      <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-xl p-5 text-center space-y-1">
-                        <Trophy className="h-8 w-8 text-amber-400 mx-auto mb-1" />
-                        <h4 className="font-extrabold text-slate-200">Quiz Completed!</h4>
-                        <p className="text-base font-black text-indigo-400">Score: {quizResult.score}%</p>
-                        <p className="text-xxs text-slate-550">
-                          ({quizResult.correctAnswersCount} correct answers out of {quizResult.totalQuestionsCount})
-                        </p>
+                      <div className="bg-slate-950/60 border border-slate-850 rounded-2xl p-6 text-center space-y-4 shadow-lg relative overflow-hidden">
+                        {/* Background subtle glowing circles */}
+                        <div className="absolute -top-10 -right-10 w-24 h-24 bg-brand-500/5 rounded-full blur-xl" />
+                        <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl" />
+
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                          <Trophy className="h-8 w-8 animate-bounce-slow" />
+                        </div>
+                        
+                        <div className="space-y-1.5">
+                          <h4 className="font-black text-white text-base">Practice Quiz Results</h4>
+                          <p className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">
+                            Chapter Review • {quizResult.totalQuestionsCount} Questions
+                          </p>
+                        </div>
+
+                        <div className="py-2">
+                          <div className="max-w-[240px] mx-auto bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+                            <span className="text-slate-400 font-medium ml-1">Final Score:</span>
+                            <span className={`text-base font-black mr-1 ${
+                              quizResult.score >= 80 ? 'text-emerald-400' : quizResult.score >= 50 ? 'text-amber-400' : 'text-red-400'
+                            }`}>
+                              {quizResult.score}%
+                            </span>
+                          </div>
+                          
+                          <p className="text-xxs text-slate-550 mt-2">
+                            You answered {quizResult.correctAnswersCount} correct out of {quizResult.totalQuestionsCount} questions
+                          </p>
+
+                          <p className="text-[11px] text-slate-350 italic mt-3.5 px-4 leading-relaxed">
+                            {quizResult.score === 100 
+                              ? '🏆 Perfect Score! Outstanding understanding of the materials.'
+                              : quizResult.score >= 80
+                              ? '🎉 Great job! You have fully mastered this chapter.'
+                              : quizResult.score >= 50
+                              ? '👍 Good attempt! Review the questions below to secure a higher mark.'
+                              : '💪 Keep studying and retake the quiz to improve your score.'
+                            }
+                          </p>
+                        </div>
                       </div>
 
                       <div className="space-y-5">
                         {quizResult.results.map((q, idx) => (
-                          <div key={idx} className="space-y-2 border-b border-slate-900/60 pb-4">
-                            <p className="font-bold text-slate-250">
+                          <div key={idx} className="space-y-3.5 border-b border-slate-900/60 pb-5">
+                            <p className="font-bold text-slate-200">
                               {idx + 1}. {q.questionText}
                             </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xxs">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xxs">
                               {q.options.map((opt, oIdx) => {
                                 const isSelected = q.selectedOptionIndex === oIdx;
                                 const isCorrectOpt = q.correctOptionIndex === oIdx;
                                 return (
                                   <div
                                     key={oIdx}
-                                    className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                                    className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
                                       isCorrectOpt
-                                        ? 'bg-emerald-950/15 border-emerald-500/40 text-emerald-450'
+                                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-medium'
                                         : isSelected
-                                        ? 'bg-red-950/15 border-red-500/40 text-red-450'
+                                        ? 'bg-red-500/10 border-red-500/30 text-red-400 font-medium'
                                         : 'bg-slate-950 border-slate-900 text-slate-450'
                                     }`}
                                   >
-                                    <span>{opt}</span>
-                                    {isCorrectOpt && <span className="text-xxs font-bold">Correct</span>}
+                                    <div className="flex items-center space-x-2">
+                                      <span className="text-slate-550 font-mono text-[10px] uppercase">
+                                        {String.fromCharCode(65 + oIdx)}.
+                                      </span>
+                                      <span>{opt}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2 shrink-0">
+                                      {isSelected && (
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                          isCorrectOpt ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+                                        }`}>
+                                          Your Choice
+                                        </span>
+                                      )}
+                                      {isCorrectOpt ? (
+                                        <CheckCircle className="h-4 w-4 text-emerald-400 fill-emerald-500/10 shrink-0" />
+                                      ) : isSelected ? (
+                                        <XCircle className="h-4 w-4 text-red-400 fill-red-500/10 shrink-0" />
+                                      ) : null}
+                                    </div>
                                   </div>
                                 );
                               })}
                             </div>
-                            <p className="text-slate-400 italic text-xxs pt-1">
-                              <span className="font-semibold text-slate-350">Explanation:</span> {q.explanation}
-                            </p>
+                            {q.explanation && (
+                              <div className="bg-slate-950/40 border border-slate-900/60 rounded-xl p-3 mt-2 text-xxs text-slate-400 leading-relaxed">
+                                <span className="font-bold text-slate-350 uppercase tracking-wide text-[9px] block mb-1">
+                                  Explanation
+                                </span>
+                                {q.explanation}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
 
                       <button
                         onClick={handleFetchQuiz}
-                        className="w-full bg-slate-900 border border-slate-800 hover:border-slate-700 text-white font-semibold py-2.5 rounded-xl transition-colors"
+                        className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl transition-all shadow-md active:scale-98"
                       >
                         Retake Quiz
                       </button>

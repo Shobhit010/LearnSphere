@@ -110,9 +110,39 @@ const getLecturesByChapter = expressAsyncHandler(async (req, res, next) => {
   const lectures = await Lecture.find({ chapterId }).sort({ order: 1 });
 
   if (!hasAccess) {
+    // Find all chapters of the course to check first chapter's first lecture
+    const courseChapters = await Chapter.find({ courseId: chapter.courseId }).sort({ order: 1 });
+    const courseChapterIds = courseChapters.map((c) => c._id);
+
+    // Check if any lecture in the entire course has isPreviewFree: true
+    const anyExplicitPreview = await Lecture.findOne({
+      chapterId: { $in: courseChapterIds },
+      isPreviewFree: true,
+    });
+
+    let firstLectureId = null;
+    if (!anyExplicitPreview) {
+      // Find the first lecture of the first chapter that has lectures
+      for (const chId of courseChapterIds) {
+        const firstLec = await Lecture.findOne({ chapterId: chId }).sort({ order: 1 });
+        if (firstLec) {
+          firstLectureId = firstLec._id.toString();
+          break;
+        }
+      }
+    }
+
     // Filter out content for non-enrolled students
     const filteredLectures = lectures.map((lec) => {
-      if (lec.isPreviewFree) return lec;
+      const isPreview = lec.isPreviewFree || (firstLectureId && lec._id.toString() === firstLectureId);
+      if (isPreview) {
+        if (!lec.isPreviewFree) {
+          const lecObj = lec.toObject();
+          lecObj.isPreviewFree = true;
+          return lecObj;
+        }
+        return lec;
+      }
       // Mask sensitive fields
       const masked = lec.toObject();
       masked.youtubeVideoId = 'LOCKED';

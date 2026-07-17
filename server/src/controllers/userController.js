@@ -67,9 +67,7 @@ const toggleSuspendUser = expressAsyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Approve teacher application (Admin only)
-// @route   PATCH /api/v1/users/:id/approve-teacher
-// @access  Private/Admin
+// Teacher approval removed; endpoint retained as a no-op compatibility path.
 const approveTeacher = expressAsyncHandler(async (req, res, next) => {
   const user = await User.findById(req.params.id);
 
@@ -87,7 +85,7 @@ const approveTeacher = expressAsyncHandler(async (req, res, next) => {
   res.status(200).json({
     success: true,
     data: user,
-    message: 'Teacher has been approved successfully',
+    message: 'Teacher approval is no longer required',
   });
 });
 

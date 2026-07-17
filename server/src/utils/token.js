@@ -31,7 +31,7 @@ const sendTokenResponse = async (user, statusCode, res) => {
     ),
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   };
 
   res.cookie('refreshToken', refreshToken, cookieOptions);

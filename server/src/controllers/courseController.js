@@ -14,16 +14,11 @@ const isCourseOwner = async (courseId, userId, userRole) => {
   return course && course.teacherId.toString() === userId.toString();
 };
 
-// @desc    Create a new course (Approved Teachers only)
+// @desc    Create a new course
 // @route   POST /api/v1/courses
 // @access  Private/Teacher
 const createCourse = expressAsyncHandler(async (req, res, next) => {
   const { title, subtitle, description, category, subcategory, level, language, price, tags } = req.body;
-
-  // Check if teacher is approved
-  if (req.user.role === 'teacher' && !req.user.isApprovedTeacher) {
-    return next(new AppError('Your teacher profile is pending admin approval. You cannot create courses yet.', 403));
-  }
 
   const course = await Course.create({
     title,
@@ -173,6 +168,35 @@ const getCourseById = expressAsyncHandler(async (req, res, next) => {
     }
   }
 
+  // Check enrollment/ownership/admin if logged in
+  let hasFullAccess = false;
+  let isEnrolled = false;
+  let progressPercent = 0;
+  if (req.user) {
+    if (req.user.role === 'admin') {
+      hasFullAccess = true;
+    } else {
+      const isOwner = await isCourseOwner(course._id, req.user.id, req.user.role);
+      if (isOwner) {
+        hasFullAccess = true;
+      } else {
+        const enrollment = await Enrollment.findOne({
+          studentId: req.user.id,
+          courseId: course._id,
+        });
+        isEnrolled = !!enrollment;
+        if (isEnrolled) {
+          hasFullAccess = true;
+          const progress = await Progress.findOne({
+            studentId: req.user.id,
+            courseId: course._id,
+          });
+          progressPercent = progress ? progress.percentComplete : 0;
+        }
+      }
+    }
+  }
+
   // Fetch Chapters & Lectures (curriculum)
   const chapters = await Chapter.find({ courseId: course._id }).sort({ order: 1 });
   
@@ -192,23 +216,40 @@ const getCourseById = expressAsyncHandler(async (req, res, next) => {
     })
   );
 
-  // Check enrollment if logged in
-  let isEnrolled = false;
-  let progressPercent = 0;
-  if (req.user) {
-    const enrollment = await Enrollment.findOne({
-      studentId: req.user.id,
-      courseId: course._id,
-    });
-    isEnrolled = !!enrollment;
-
-    if (isEnrolled) {
-      const progress = await Progress.findOne({
-        studentId: req.user.id,
-        courseId: course._id,
-      });
-      progressPercent = progress ? progress.percentComplete : 0;
+  // If not full access (guest or not enrolled), mask lectures except preview ones
+  if (!hasFullAccess) {
+    // Collect all lectures in order to find default preview lecture if needed
+    let allLectures = [];
+    for (const chap of curriculum) {
+      allLectures.push(...chap.lectures);
     }
+
+    const hasExplicitPreview = allLectures.some((lec) => lec.isPreviewFree);
+    let firstLectureId = null;
+    if (!hasExplicitPreview && allLectures.length > 0) {
+      firstLectureId = allLectures[0]._id.toString();
+    }
+
+    // Map curriculum and mask
+    curriculum.forEach((chap) => {
+      chap.lectures = chap.lectures.map((lec) => {
+        const isPreview = lec.isPreviewFree || (firstLectureId && lec._id.toString() === firstLectureId);
+        if (isPreview) {
+          if (!lec.isPreviewFree) {
+            const lecObj = lec.toObject();
+            lecObj.isPreviewFree = true;
+            return lecObj;
+          }
+          return lec;
+        }
+
+        // Mask other lectures
+        const masked = lec.toObject();
+        masked.youtubeVideoId = 'LOCKED';
+        masked.resources = [];
+        return masked;
+      });
+    });
   }
 
   res.status(200).json({
@@ -301,7 +342,7 @@ const uploadCourseThumbnail = expressAsyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Submit course for review (Teacher sets to pending)
+// @desc    Publish course (Teacher)
 // @route   PATCH /api/v1/courses/:id/submit
 // @access  Private/Teacher
 const submitCourseForReview = expressAsyncHandler(async (req, res, next) => {
@@ -320,57 +361,42 @@ const submitCourseForReview = expressAsyncHandler(async (req, res, next) => {
     return next(new AppError(`Only draft courses can be submitted. Current status: ${course.status}`, 400));
   }
 
-  // Check if course has curriculum (at least one chapter and one lecture)
+  // Check if course has curriculum (at least one chapter)
   const chapterCount = await Chapter.countDocuments({ courseId: course._id });
   if (chapterCount === 0) {
     return next(new AppError('Cannot submit course. Add at least one chapter.', 400));
   }
 
-  course.status = 'pending';
+  course.status = 'published';
   await course.save();
 
   res.status(200).json({
     success: true,
     data: course,
-    message: 'Course submitted for admin review successfully',
+    message: 'Course published successfully',
   });
 });
 
-// @desc    Approve or Reject a course (Admin only)
+// @desc    Approve or Reject a course (no-op compatibility)
 // @route   PATCH /api/v1/courses/:id/review
-// @access  Private/Admin
+// @access  Private/Teacher
 const approveOrRejectCourse = expressAsyncHandler(async (req, res, next) => {
-  const { action, feedback } = req.body; // 'approve' or 'reject'
-
-  if (!['approve', 'reject'].includes(action)) {
-    return next(new AppError('Invalid action. Use approve or reject', 400));
-  }
-
   const course = await Course.findById(req.params.id);
   if (!course || course.isDeleted) {
     return next(new AppError('Course not found', 404));
   }
 
-  if (course.status !== 'pending') {
-    return next(new AppError('Only pending courses can be reviewed', 400));
+  if (course.teacherId.toString() !== req.user.id.toString() && req.user.role !== 'admin') {
+    return next(new AppError('You do not have permission to modify this course', 403));
   }
 
-  course.status = action === 'approve' ? 'published' : 'rejected';
+  course.status = 'published';
   await course.save();
-
-  // Here, trigger in-app notification to the teacher
-  const Notification = require('../models/Notification');
-  await Notification.create({
-    userId: course.teacherId,
-    type: 'course_approval',
-    message: `Your course "${course.title}" has been ${action === 'approve' ? 'approved & published' : 'rejected by the review team'}. ${feedback ? 'Feedback: ' + feedback : ''}`,
-    link: `/teacher/courses/${course._id}`,
-  });
 
   res.status(200).json({
     success: true,
     data: course,
-    message: `Course has been successfully ${course.status}`,
+    message: 'Course published successfully',
   });
 });
 

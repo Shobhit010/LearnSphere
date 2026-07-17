@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { LogOut, User, Bell, BookOpen, Menu, X, PlusCircle, ShieldAlert } from 'lucide-react';
+import { LogOut, User, Bell, BookOpen, Menu, X, PlusCircle } from 'lucide-react';
 import { logout } from '../../store/authSlice';
 import { API } from '../../services/api';
 
@@ -87,13 +87,6 @@ export default function Navbar() {
                   <span>Instructor Area</span>
                 </Link>
               )}
-              {user.role === 'admin' && (
-                <Link to="/admin/dashboard" className="flex items-center space-x-1 text-red-400 hover:text-red-300 transition-colors">
-                  <ShieldAlert className="h-4 w-4" />
-                  <span>Admin Control</span>
-                </Link>
-              )}
-
               {/* Notification Center */}
               <div className="relative">
                 <button
@@ -258,15 +251,6 @@ export default function Navbar() {
                   className="block text-slate-300 hover:text-white py-2"
                 >
                   Instructor Area
-                </Link>
-              )}
-              {user.role === 'admin' && (
-                <Link
-                  to="/admin/dashboard"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block text-red-400 hover:text-red-300 py-2"
-                >
-                  Admin Control
                 </Link>
               )}
               <button

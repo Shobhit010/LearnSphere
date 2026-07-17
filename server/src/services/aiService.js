@@ -91,10 +91,128 @@ ${transcript || '(No transcript available for this lecture)'}
  * @param {Array<Object>} lectures - Array of lecture objects in this chapter
  * @returns {Promise<Object>} - The Quiz model record
  */
+const shuffleOptions = (options, correctOptionIndex) => {
+  const items = options.map((opt, idx) => ({
+    text: opt,
+    isCorrect: idx === correctOptionIndex,
+  }));
+
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+
+  return {
+    options: items.map((item) => item.text),
+    correctOptionIndex: items.findIndex((item) => item.isCorrect),
+  };
+};
+
+const DB_QUESTION_POOL = [
+  {
+    questionText: 'What Mongoose method hashes a password before saving it to MongoDB?',
+    options: ['pre-save hook', 'post-save hook', 'schema.validator', 'bcrypt.hash() directly in controller'],
+    correctOptionIndex: 0,
+    explanation: 'Mongoose pre-save hooks intercept model save events, allowing developers to hash sensitive attributes securely before persistence.',
+  },
+  {
+    questionText: 'Which option represents a valid compound unique index in Mongoose?',
+    options: ['schema.index({ field1: 1, field2: 1 }, { unique: true })', 'schema.addIndex()', 'mongoose.compoundIndex()', 'schema.field.unique = true'],
+    correctOptionIndex: 0,
+    explanation: 'Compound unique indexes are defined on schemas using schema.index() with fields listed in order and { unique: true } configuration.',
+  },
+  {
+    questionText: 'What happens by default if select: false is specified in a schema attribute?',
+    options: ['The field is excluded from query outputs unless explicitly selected', 'The field cannot be updated', 'The field is encrypted', 'The field is deleted'],
+    correctOptionIndex: 0,
+    explanation: 'Setting select: false instructs Mongoose to omit the attribute from find queries, preserving security for fields like password hashes.',
+  },
+  {
+    questionText: 'Which package is commonly used as a Mongoose database connector in Node.js?',
+    options: ['mongoose', 'mysql2', 'pg', 'redis'],
+    correctOptionIndex: 0,
+    explanation: 'Mongoose is the standard MongoDB Object Document Mapper (ODM) for Node.js environments.',
+  },
+  {
+    questionText: 'How can you validate that a number is non-negative in a Mongoose schema?',
+    options: ['min: 0 validation rule', 'max: 0 validation rule', 'positive: true key', 'negative: false key'],
+    correctOptionIndex: 0,
+    explanation: 'The min validation property enforces that any numerical inputs remain at or above the designated threshold (e.g. 0).',
+  },
+  {
+    questionText: 'Which Mongoose schema option automatically adds createdAt and updatedAt fields to documents?',
+    options: ['{ timestamps: true }', '{ trackTime: true }', '{ dates: true }', '{ history: true }'],
+    correctOptionIndex: 0,
+    explanation: 'Setting { timestamps: true } as a schema option tells Mongoose to automatically manage createdAt and updatedAt fields.',
+  },
+  {
+    questionText: 'What is the correct way to define a reference to another model in a Mongoose schema?',
+    options: ["type: mongoose.Schema.Types.ObjectId, ref: 'ModelName'", "type: String, ref: 'ModelName'", "type: Reference, model: 'ModelName'", 'type: mongoose.Link'],
+    correctOptionIndex: 0,
+    explanation: 'To reference another model, define the field with type ObjectId and specify the target model in the ref property.',
+  },
+  {
+    questionText: 'Which Mongoose feature allows defining document properties that are not persisted to MongoDB?',
+    options: ['Virtuals', 'Hooks', 'Statics', 'Methods'],
+    correctOptionIndex: 0,
+    explanation: 'Mongoose Virtuals are document properties that you can get and set but that do not get persisted to MongoDB.',
+  },
+];
+
+const DEFAULT_QUESTION_POOL = [
+  {
+    questionText: 'What is the main advantage of creating separate clients and servers in full-stack setups?',
+    options: ['Clean separation of concerns', 'Slower deployments', 'Exposing environment keys', 'Harder debugging'],
+    correctOptionIndex: 0,
+    explanation: 'Separating client (UI representation) and server (business calculations) establishes clean boundaries, improving modularity and deployment workflows.',
+  },
+  {
+    questionText: 'How are unlisted YouTube video IDs typically integrated into web players?',
+    options: ['Embedded via iframe or react-youtube component', 'Downloaded locally', 'Uploaded directly to MongoDB', 'Converted to PDFs'],
+    correctOptionIndex: 0,
+    explanation: 'Unlisted YouTube content is securely streamed and rendered using HTML iframes or packages like react-youtube.',
+  },
+  {
+    questionText: 'Which environment file is used to store sensitive API credentials locally?',
+    options: ['.env file', 'package.json', 'README.md', 'DECISIONS.md'],
+    correctOptionIndex: 0,
+    explanation: 'The .env file manages local configurations and API credentials, keeping secrets out of public version control repositories.',
+  },
+  {
+    questionText: 'Which HTTP status code corresponds to a validation error?',
+    options: ['400 Bad Request', '401 Unauthorized', '403 Forbidden', '500 Server Error'],
+    correctOptionIndex: 0,
+    explanation: '400 Bad Request indicates that the server cannot process the request due to client validation issues.',
+  },
+  {
+    questionText: 'How do you structure responses consistently across REST API routes?',
+    options: ['Wrap outputs in a standard JSON wrapper', 'Return raw strings', 'Return HTML text directly', 'Response formatting is unnecessary'],
+    correctOptionIndex: 0,
+    explanation: 'A standardized wrapper like { success: true, data: {} } improves predictability for client-side API integrations.',
+  },
+  {
+    questionText: 'What is the purpose of CORS (Cross-Origin Resource Sharing) middleware in Express?',
+    options: ['To specify which frontend origins are permitted to access backend resources', 'To encrypt server payloads', 'To compress API responses', 'To limit the rate of incoming requests'],
+    correctOptionIndex: 0,
+    explanation: 'CORS configuration allows the server to explicitly allow requests from specific external origins (like the React client port).',
+  },
+  {
+    questionText: 'Which HTTP method is typically used to create a new resource on the server?',
+    options: ['POST', 'GET', 'PUT', 'DELETE'],
+    correctOptionIndex: 0,
+    explanation: 'The POST HTTP method is standard for creating new documents or resources in RESTful API architectures.',
+  },
+  {
+    questionText: 'What does JWT (JSON Web Token) contain to verify the identity of a logged-in user?',
+    options: ['A cryptographically signed payload containing user claims', 'The user\'s plain-text password', 'A copy of the database index', 'A raw binary stream of the user session'],
+    correctOptionIndex: 0,
+    explanation: 'A JWT contains an encoded header, payload, and a signature created with a secret key to safely identify authenticated sessions.',
+  },
+];
+
 const generateChapterQuiz = async (chapterId, chapterTitle, lectures) => {
-  // Check if quiz already exists
-  let quiz = await Quiz.findOne({ chapterId });
-  if (quiz) return quiz;
+  // Always delete any existing quiz for this chapter to ensure a new dynamic quiz is generated on request
+  await Quiz.deleteMany({ chapterId });
 
   let questions = [];
 
@@ -105,12 +223,12 @@ const generateChapterQuiz = async (chapterId, chapterTitle, lectures) => {
 
   if (isAIConfigured) {
     try {
-      const prompt = `You are a curriculum designer. Generate a 5-question multiple-choice practice quiz for a chapter titled "${chapterTitle}" based on these lecture transcripts:
+      const prompt = `You are a curriculum designer. Generate a dynamic 5-question multiple-choice practice quiz for a chapter titled "${chapterTitle}" based on these lecture transcripts:
 """
 ${transcriptsText}
 """
 
-Return your response strictly as a JSON array of objects. Do not include markdown codeblocks or any additional text.
+Return your response strictly as a JSON array of objects. Do not include markdown codeblocks or any additional text. Ensure the questions vary across multiple generation requests.
 Each question object must follow this JSON schema:
 {
   "questionText": "What is ...?",
@@ -135,7 +253,7 @@ Each question object must follow this JSON schema:
         body: JSON.stringify({
           model: model,
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
+          temperature: 0.9,
         }),
       });
 
@@ -154,7 +272,7 @@ Each question object must follow this JSON schema:
   }
 
   // Save the generated quiz to database
-  quiz = await Quiz.create({
+  const quiz = await Quiz.create({
     chapterId,
     questions,
   });
@@ -185,77 +303,34 @@ const generateMockAIAnswer = (title, transcript, question) => {
 };
 
 const generateMockQuizQuestions = (chapterTitle, lectures) => {
-  // Generate generic smart MCQs based on chapter title keywords
   const title = chapterTitle.toLowerCase();
   
+  // Decide pool
+  let pool = DEFAULT_QUESTION_POOL;
   if (title.includes('mongoose') || title.includes('models') || title.includes('database')) {
-    return [
-      {
-        questionText: 'What Mongoose method hashes a password before saving it to MongoDB?',
-        options: ['pre-save hook', 'post-save hook', 'schema.validator', 'bcrypt.hash() directly in controller'],
-        correctOptionIndex: 0,
-        explanation: 'Mongoose pre-save hooks intercept model save events, allowing developers to hash sensitive attributes securely before persistence.',
-      },
-      {
-        questionText: 'Which option represents a valid compound unique index in Mongoose?',
-        options: ['schema.index({ field1: 1, field2: 1 }, { unique: true })', 'schema.addIndex()', 'mongoose.compoundIndex()', 'schema.field.unique = true'],
-        correctOptionIndex: 0,
-        explanation: 'Compound unique indexes are defined on schemas using schema.index() with fields listed in order and { unique: true } configuration.',
-      },
-      {
-        questionText: 'What happens by default if select: false is specified in a schema attribute?',
-        options: ['The field cannot be updated', 'The field is excluded from query outputs unless explicitly selected', 'The field is encrypted', 'The field is deleted'],
-        correctOptionIndex: 1,
-        explanation: 'Setting select: false instructs Mongoose to omit the attribute from find queries, preserving security for fields like password hashes.',
-      },
-      {
-        questionText: 'Which package is commonly used as a Mongoose database connector in Node.js?',
-        options: ['mongoose', 'mysql2', 'pg', 'redis'],
-        correctOptionIndex: 0,
-        explanation: 'Mongoose is the standard MongoDB Object Document Mapper (ODM) for Node.js environments.',
-      },
-      {
-        questionText: 'How can you validate that a number is non-negative in a Mongoose schema?',
-        options: ['min: 0 validation rule', 'max: 0 validation rule', 'positive: true key', 'negative: false key'],
-        correctOptionIndex: 0,
-        explanation: 'The min validation property enforces that any numerical inputs remain at or above the designated threshold (e.g. 0).',
-      },
-    ];
+    pool = DB_QUESTION_POOL;
   }
 
-  // Default fallback quiz
-  return [
-    {
-      questionText: 'What is the main advantage of creating separate clients and servers in full-stack setups?',
-      options: ['Clean separation of concerns', 'Slower deployments', 'Exposing environment keys', 'Harder debugging'],
-      correctOptionIndex: 0,
-      explanation: 'Separating client (UI representation) and server (business calculations) establishes clean boundaries, improving modularity and deployment workflows.',
-    },
-    {
-      questionText: 'How are unlisted YouTube video IDs typically integrated into web players?',
-      options: ['Embedded via iframe or react-youtube component', 'Downloaded locally', 'Uploaded directly to MongoDB', 'Converted to PDFs'],
-      correctOptionIndex: 0,
-      explanation: 'Unlisted YouTube content is securely streamed and rendered using HTML iframes or packages like react-youtube.',
-    },
-    {
-      questionText: 'Which environment file is used to store sensitive API credentials locally?',
-      options: ['.env file', 'package.json', 'README.md', 'DECISIONS.md'],
-      correctOptionIndex: 0,
-      explanation: 'The .env file manages local configurations and API credentials, keeping secrets out of public version control repositories.',
-    },
-    {
-      questionText: 'Which HTTP status code corresponds to a validation error?',
-      options: ['400 Bad Request', '401 Unauthorized', '403 Forbidden', '500 Server Error'],
-      correctOptionIndex: 0,
-      explanation: '400 Bad Request indicates that the server cannot process the request due to client validation issues.',
-    },
-    {
-      questionText: 'How do you structure responses consistently across REST API routes?',
-      options: ['Wrap outputs in a standard JSON wrapper', 'Return raw strings', 'Return HTML text directly', 'Response formatting is unnecessary'],
-      correctOptionIndex: 0,
-      explanation: 'A standardized wrapper like { success: true, data: {} } improves predictability for client-side API integrations.',
-    },
-  ];
+  // Shuffle pool to pick 5 random questions
+  const shuffledPool = [...pool];
+  for (let i = shuffledPool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffledPool[i], shuffledPool[j]] = [shuffledPool[j], shuffledPool[i]];
+  }
+
+  // Pick first 5 questions
+  const selectedQuestions = shuffledPool.slice(0, 5);
+
+  // For each question, shuffle its options and update correctOptionIndex
+  return selectedQuestions.map((q) => {
+    const { options, correctOptionIndex } = shuffleOptions(q.options, q.correctOptionIndex);
+    return {
+      questionText: q.questionText,
+      options,
+      correctOptionIndex,
+      explanation: q.explanation,
+    };
+  });
 };
 
 module.exports = {
